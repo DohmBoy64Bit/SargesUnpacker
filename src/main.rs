@@ -3,7 +3,7 @@ use sarges_unpacker::{
     operations::{self, CreateOptions, ExecutionOptions, ExistingFilePolicy},
 };
 use std::env;
-const VERSION: &str = "sarges-unpacker 0.1.0";
+const VERSION: &str = "sarges-unpacker 0.2.0";
 fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().skip(1).collect();
     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
