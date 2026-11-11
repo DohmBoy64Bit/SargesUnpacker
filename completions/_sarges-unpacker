@@ -1,0 +1,2 @@
+#compdef sarges-unpacker
+_arguments '1:command:(create extract list verify stats --help --version)' '*:option:(-r -m= --json --dry-run --overwrite --skip-existing --progress --quiet --verbose)'

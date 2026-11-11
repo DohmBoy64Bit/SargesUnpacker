@@ -1,0 +1,9 @@
+/target/
+/tmp-*/
+/*.x
+/.TXT
+/a
+/b
+/c
+/docs/*
+!/docs/file-format.md

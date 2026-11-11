@@ -1,0 +1,13 @@
+[package]
+name = "sarges-unpacker"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "sarges_unpacker"
+path = "src/lib.rs"
+
+[profile.release]
+lto = true
+codegen-units = 1
+
