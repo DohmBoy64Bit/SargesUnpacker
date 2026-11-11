@@ -10,7 +10,7 @@ validate, and statistics operations for `.x` archives.
 ## Historical reference
 
 The original utility identifies itself as **Doctor Pack** and contains the
-build timestamp **February 4, 2000, 11:24:18**. The original binary does not
+build timestamp **February 4, 2000**. The original binary does not
 identify an individual author or organization, so this project makes no
 authorship attribution.
 
