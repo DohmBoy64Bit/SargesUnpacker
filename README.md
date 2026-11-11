@@ -182,5 +182,5 @@ cargo build --release
 
 The tool supports the archive operations currently implemented and tested in
 this repository. Compatibility claims are limited to the NORK behavior
-observed in the analyzed utility and Army Men RTS test archives; undocumented
+observed in the analyzed Army Men RTS test archives; undocumented
 variants of the format may require additional investigation.
