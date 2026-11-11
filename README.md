@@ -1,4 +1,3 @@
-# Sarges Unpacker
 
 <p align="center">
   <img src="assets/sarges-unpacker-banner.png" alt="Sarge's Unpacker project banner" width="100%">
