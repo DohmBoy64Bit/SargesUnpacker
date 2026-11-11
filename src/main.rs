@@ -70,6 +70,29 @@ fn main() -> std::io::Result<()> {
             directory.as_deref().unwrap_or(std::path::Path::new(".")),
             execution_options(&options),
         ),
+        Ok(Command::ExtractAll {
+            directory,
+            output,
+            recurse,
+            options,
+        }) => {
+            let report = operations::extract_all(
+                &directory,
+                output.as_deref().unwrap_or(&directory),
+                recurse,
+                execution_options(&options),
+            )?;
+            if report.failures.is_empty() {
+                Ok(())
+            } else {
+                for failure in report.failures {
+                    eprintln!("{failure}");
+                }
+                Err(std::io::Error::other(
+                    "one or more archives failed to extract",
+                ))
+            }
+        }
         Err(error) => {
             eprintln!("{}\n\n{}", error, cli::usage());
             Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, error))

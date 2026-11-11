@@ -18,6 +18,7 @@ authorship attribution.
 
 - Create NORK v1 archives from files.
 - Extract archive members while preserving their stored relative paths.
+- Extract all `.x` archives found in a directory into separate output directories.
 - List archive members with names, sizes, and payload offsets.
 - Validate archive structure with `verify`.
 - Report archive statistics with `stats`.
@@ -107,6 +108,26 @@ List archive members:
 sarges-unpacker list archive.x
 ```
 
+### Extract all
+
+Extract every archive directly inside a directory. Each archive is extracted
+into a directory named after its file stem:
+
+```text
+sarges-unpacker extract-all path/to/archives path/to/output
+```
+
+Use `--recursive` to discover archives in nested directories:
+
+```text
+sarges-unpacker extract-all --recursive path/to/archives path/to/output
+```
+
+By default, extraction continues after an individual archive failure and
+reports the failures at the end. The command exits unsuccessfully if any
+archive could not be extracted. Existing-file, dry-run, progress, quiet, and
+verbose options use the same behavior as single-archive extraction.
+
 ### Verify and stats
 
 Validate an archive:
@@ -134,6 +155,7 @@ sarges-unpacker stats --json archive.x
 | Option | Purpose |
 | --- | --- |
 | `-r` | Include files in nested directories when creating an archive. |
+| `--recursive` | Include nested directories when discovering archives with `extract-all`. |
 | `-m=MASK` | Select files by a case-insensitive `*`/`?` file-name mask. |
 | `--json` | Use JSON output where supported. |
 | `--dry-run` | Validate or plan an operation without writing output files. |

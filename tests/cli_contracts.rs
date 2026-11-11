@@ -91,3 +91,28 @@ fn list_keeps_reference_behavior() {
         }
     );
 }
+
+#[test]
+fn parses_extract_all_options() {
+    let parsed = parse_args(&[
+        "extract-all",
+        "--recursive",
+        "--dry-run",
+        "archives",
+        "output",
+    ])
+    .unwrap();
+
+    assert_eq!(
+        parsed,
+        Command::ExtractAll {
+            directory: "archives".into(),
+            output: Some("output".into()),
+            recurse: true,
+            options: RuntimeOptions {
+                dry_run: true,
+                ..RuntimeOptions::default()
+            },
+        }
+    );
+}

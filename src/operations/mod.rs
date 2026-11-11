@@ -2,9 +2,10 @@
 
 use crate::archive::{Archive, HEADER_SIZE};
 use crate::filesystem::{self, CollectionOptions};
+use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::{self, Read, Seek, SeekFrom, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Filesystem selection options used by archive creation.
 pub type CreateOptions<'a> = CollectionOptions<'a>;
@@ -29,6 +30,17 @@ pub struct ExecutionOptions {
     pub existing: ExistingFilePolicy,
     /// Emit per-member progress messages.
     pub progress: bool,
+}
+
+/// Result summary for a batch archive extraction.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct ExtractAllReport {
+    /// Number of archives discovered.
+    pub discovered: usize,
+    /// Number of archives extracted successfully.
+    pub extracted: usize,
+    /// Archive paths and errors that could not be extracted.
+    pub failures: Vec<String>,
 }
 
 impl Default for ExecutionOptions {
@@ -141,6 +153,74 @@ pub fn extract_with_options(
         io::copy(&mut limited, &mut destination)?;
         if execution.progress {
             crate::progress::extracted(&entry.name, entry.size);
+        }
+    }
+    Ok(())
+}
+
+/// Extracts all `.x` archives found in a directory.
+pub fn extract_all(
+    input: &Path,
+    output: &Path,
+    recurse: bool,
+    execution: ExecutionOptions,
+) -> io::Result<ExtractAllReport> {
+    let archives = discover_archives(input, recurse)?;
+    let mut report = ExtractAllReport {
+        discovered: archives.len(),
+        ..ExtractAllReport::default()
+    };
+    let mut output_names = HashSet::new();
+
+    for archive in archives {
+        let name = archive
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .ok_or_else(|| {
+                crate::errors::invalid_input(format!(
+                    "archive has no usable name: {}",
+                    archive.display()
+                ))
+            })?;
+        let key = name.to_ascii_lowercase();
+        if !output_names.insert(key) {
+            report.failures.push(format!(
+                "{}: output directory name collision",
+                archive.display()
+            ));
+            continue;
+        }
+        let destination = output.join(name);
+        match extract_with_options(&archive, &destination, execution) {
+            Ok(()) => report.extracted += 1,
+            Err(error) => report
+                .failures
+                .push(format!("{}: {error}", archive.display())),
+        }
+    }
+    Ok(report)
+}
+
+fn discover_archives(root: &Path, recurse: bool) -> io::Result<Vec<PathBuf>> {
+    let mut archives = Vec::new();
+    discover_archives_in(root, recurse, &mut archives)?;
+    archives.sort_by(|left, right| left.to_string_lossy().cmp(&right.to_string_lossy()));
+    Ok(archives)
+}
+
+fn discover_archives_in(root: &Path, recurse: bool, output: &mut Vec<PathBuf>) -> io::Result<()> {
+    for entry in fs::read_dir(root)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            if recurse {
+                discover_archives_in(&path, recurse, output)?;
+            }
+        } else if path
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("x"))
+        {
+            output.push(path);
         }
     }
     Ok(())

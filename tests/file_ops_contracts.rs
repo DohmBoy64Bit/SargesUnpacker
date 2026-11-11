@@ -1,5 +1,6 @@
 use sarges_unpacker::file_ops::{
-    create, extract, extract_with_options, CreateOptions, ExecutionOptions, ExistingFilePolicy,
+    create, extract, extract_all, extract_with_options, CreateOptions, ExecutionOptions,
+    ExistingFilePolicy,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -195,4 +196,90 @@ fn creation_orders_members_deterministically() {
     let bytes = fs::read(archive_path).unwrap();
     let archive = sarges_unpacker::archive::Archive::parse(&bytes).unwrap();
     assert_eq!(archive.entries(), vec!["a.txt", "z.txt"]);
+}
+
+#[test]
+fn extracts_all_archives_into_named_directories() {
+    let root = fixture("extract-all");
+    let archives = root.join("archives");
+    let nested = archives.join("nested");
+    fs::create_dir_all(&nested).unwrap();
+
+    for (directory, name, contents) in [
+        (&archives, "first.x", b"first".as_slice()),
+        (&nested, "second.x", b"second".as_slice()),
+    ] {
+        let mut bytes = Vec::new();
+        sarges_unpacker::archive::ArchiveWriter::new()
+            .add("member.txt", contents)
+            .write_to(&mut bytes)
+            .unwrap();
+        fs::write(directory.join(name), bytes).unwrap();
+    }
+
+    let output = root.join("output");
+    let report = extract_all(&archives, &output, false, ExecutionOptions::default()).unwrap();
+
+    assert_eq!(report.discovered, 1);
+    assert_eq!(report.extracted, 1);
+    assert!(report.failures.is_empty());
+    assert_eq!(fs::read(output.join("first/member.txt")).unwrap(), b"first");
+    assert!(!output.join("second").exists());
+}
+
+#[test]
+fn recursively_extracts_all_archives_and_supports_dry_run() {
+    let root = fixture("extract-all-recursive");
+    let archives = root.join("archives");
+    let nested = archives.join("nested");
+    fs::create_dir_all(&nested).unwrap();
+    let mut bytes = Vec::new();
+    sarges_unpacker::archive::ArchiveWriter::new()
+        .add("member.txt", b"nested")
+        .write_to(&mut bytes)
+        .unwrap();
+    fs::write(nested.join("nested.x"), bytes).unwrap();
+
+    let dry_output = root.join("dry-output");
+    let dry_report = extract_all(
+        &archives,
+        &dry_output,
+        true,
+        ExecutionOptions {
+            dry_run: true,
+            ..ExecutionOptions::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(dry_report.discovered, 1);
+    assert_eq!(dry_report.extracted, 1);
+    assert!(!dry_output.exists());
+
+    let output = root.join("output");
+    extract_all(&archives, &output, true, ExecutionOptions::default()).unwrap();
+    assert_eq!(
+        fs::read(output.join("nested/member.txt")).unwrap(),
+        b"nested"
+    );
+}
+
+#[test]
+fn extract_all_reports_failures_without_stopping_other_archives() {
+    let root = fixture("extract-all-failures");
+    let archives = root.join("archives");
+    fs::create_dir_all(&archives).unwrap();
+    fs::write(archives.join("bad.x"), b"not an archive").unwrap();
+    let mut bytes = Vec::new();
+    sarges_unpacker::archive::ArchiveWriter::new()
+        .add("member.txt", b"good")
+        .write_to(&mut bytes)
+        .unwrap();
+    fs::write(archives.join("good.x"), bytes).unwrap();
+
+    let output = root.join("output");
+    let report = extract_all(&archives, &output, false, ExecutionOptions::default()).unwrap();
+    assert_eq!(report.discovered, 2);
+    assert_eq!(report.extracted, 1);
+    assert_eq!(report.failures.len(), 1);
+    assert_eq!(fs::read(output.join("good/member.txt")).unwrap(), b"good");
 }

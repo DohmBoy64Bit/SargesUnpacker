@@ -73,6 +73,17 @@ pub enum Command {
         /// Shared runtime options.
         options: RuntimeOptions,
     },
+    /// Extracts every `.x` archive found in a directory.
+    ExtractAll {
+        /// Directory in which archives are discovered.
+        directory: PathBuf,
+        /// Root for per-archive output directories.
+        output: Option<PathBuf>,
+        /// Include archives in nested directories.
+        recurse: bool,
+        /// Shared runtime options.
+        options: RuntimeOptions,
+    },
     /// Lists archive members.
     List {
         /// Source archive path.
@@ -108,7 +119,10 @@ pub fn parse_args(args: &[&str]) -> Result<Command, String> {
         return Ok(Command::Version);
     }
     let command = args[0];
-    if !matches!(command, "create" | "extract" | "list" | "verify" | "stats") {
+    if !matches!(
+        command,
+        "create" | "extract" | "extract-all" | "list" | "verify" | "stats"
+    ) {
         return Err(format!("unknown command: {command}"));
     }
     let mut recurse = false;
@@ -121,7 +135,7 @@ pub fn parse_args(args: &[&str]) -> Result<Command, String> {
             .or_else(|| option.strip_prefix('-'))
         {
             match name {
-                "r" => recurse = true,
+                "r" | "recursive" => recurse = true,
                 value if value.starts_with("m=") && value.len() > 2 => {
                     mask = Some(value[2..].to_owned())
                 }
@@ -164,6 +178,12 @@ pub fn parse_args(args: &[&str]) -> Result<Command, String> {
             directory,
             options,
         },
+        "extract-all" => Command::ExtractAll {
+            directory: archive,
+            output: directory,
+            recurse,
+            options,
+        },
         "list" => Command::List { archive, options },
         "verify" => Command::Verify { archive, options },
         "stats" => Command::Stats { archive, options },
@@ -172,5 +192,5 @@ pub fn parse_args(args: &[&str]) -> Result<Command, String> {
 }
 /// Returns the command-line usage text.
 pub fn usage() -> &'static str {
-    "Sarges Unpacker\n\nUsage: sarges-unpacker <command> [options] <archive> [directory]\n\nCommands: create, extract, list, verify, stats, --version\nOptions: -r, -m=MASK, --json, --dry-run, --overwrite, --skip-existing, --progress, --quiet, --verbose"
+    "Sarges Unpacker\n\nUsage: sarges-unpacker <command> [options] <archive> [directory]\n\nCommands: create, extract, extract-all, list, verify, stats, --version\nOptions: -r, --recursive, -m=MASK, --json, --dry-run, --overwrite, --skip-existing, --progress, --quiet, --verbose"
 }
