@@ -1,4 +1,5 @@
 /target/
+/resource/
 /tmp-*/
 /*.x
 /.TXT
