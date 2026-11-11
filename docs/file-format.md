@@ -1,7 +1,6 @@
 # Army Men RTS `.x` Archive Format
 
-This document describes the `.x` archive format used by the analyzed
-`drpack.exe` tool. The format identifier stored in the file is `NORK`.
+This document describes the `.x` archive format, the format identifier stored in the file is `NORK`.
 
 Evidence sources:
 
