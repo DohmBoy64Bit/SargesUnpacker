@@ -12,3 +12,39 @@ jobs:
       - run: cargo clippy --all-targets --all-features -- -D warnings
       - run: cargo test --all-targets
       - run: cargo build --release
+      - name: Package Windows artifact
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist\sarges-unpacker -Force | Out-Null
+          Copy-Item target\release\sarges-unpacker.exe dist\sarges-unpacker\
+          Copy-Item README.md dist\sarges-unpacker\
+          Copy-Item docs\file-format.md dist\sarges-unpacker\
+          Compress-Archive -Path dist\sarges-unpacker\* -DestinationPath dist\sarges-unpacker-windows-x86_64.zip -Force
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sarges-unpacker-windows-x86_64-${{ github.sha }}
+          path: dist/sarges-unpacker-windows-x86_64.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: check
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sarges-unpacker-windows-x86_64-${{ github.sha }}
+          path: dist
+      - name: Create GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if (gh release view "${{ github.ref_name }}" 2>$null) {
+            gh release upload "${{ github.ref_name }}" dist\sarges-unpacker-windows-x86_64.zip --clobber
+          } else {
+            gh release create "${{ github.ref_name }}" dist\sarges-unpacker-windows-x86_64.zip --title "Sarges Unpacker ${{ github.ref_name }}" --generate-notes
+          }
