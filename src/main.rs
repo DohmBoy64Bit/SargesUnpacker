@@ -3,11 +3,26 @@ use sarges_unpacker::{
     operations::{self, CreateOptions, ExecutionOptions, ExistingFilePolicy},
 };
 use std::env;
-const VERSION: &str = "sarges-unpacker 0.2.0";
+const VERSION: &str = concat!("sarges-unpacker ", env!("CARGO_PKG_VERSION"));
 fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().skip(1).collect();
     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
     match cli::parse_args(&refs) {
+        Ok(Command::AddToPack {
+            archive,
+            files,
+            overwrite,
+            backup,
+            folders,
+        }) => operations::add_files_to_archive(
+            &archive,
+            &files,
+            operations::AddFilesOptions {
+                overwrite,
+                backup,
+                folders,
+            },
+        ),
         Ok(Command::Help) => {
             println!("{}", cli::usage());
             Ok(())

@@ -130,6 +130,24 @@ reports the failures at the end. The command exits unsuccessfully if any
 archive could not be extracted. Existing-file, dry-run, progress, quiet, and
 verbose options use the same behavior as single-archive extraction.
 
+### Add files to an archive
+
+Rebuild an existing archive with explicitly named members. Each input uses
+`member-path=source-file`; use `--overwrite` to replace an existing member:
+
+```text
+sarges-unpacker add-to-pack archive.x cfg/new.cfg=path/to/new.cfg
+sarges-unpacker add-to-pack --overwrite archive.x cfg/game.cfg=path/to/updated.cfg
+sarges-unpacker add-to-pack --folder=selected-files --backup archive.x
+```
+
+The operation validates all inputs before replacing the archive. New members
+are appended, while overwritten members retain their original directory order.
+`--folder=DIR` imports all files below a selected folder with relative paths;
+`--backup` saves the original beside the archive as `.bak`, and
+`--backup=PATH` selects a specific backup path. The rebuilt archive is parsed
+again before the original is replaced.
+
 ### Verify and stats
 
 Validate an archive:

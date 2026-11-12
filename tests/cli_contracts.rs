@@ -43,6 +43,74 @@ fn rejects_mask_without_an_equals_value() {
 }
 
 #[test]
+fn parses_add_to_pack_member_source_pairs_and_overwrite() {
+    let command = parse_args(&[
+        "add-to-pack",
+        "archive.x",
+        "cfg/new.cfg=source/new.cfg",
+        "textures/a.tga=C:\\tmp\\a.tga",
+        "--overwrite",
+    ])
+    .unwrap();
+
+    assert_eq!(
+        command,
+        Command::AddToPack {
+            archive: "archive.x".into(),
+            files: vec![
+                ("cfg/new.cfg".into(), "source/new.cfg".into()),
+                ("textures/a.tga".into(), "C:\\tmp\\a.tga".into()),
+            ],
+            overwrite: true,
+            backup: None,
+            folders: Vec::new(),
+        }
+    );
+}
+
+#[test]
+fn rejects_invalid_add_to_pack_specification() {
+    assert!(parse_args(&["add-to-pack", "archive.x", "missing-separator"]).is_err());
+    assert!(parse_args(&["add-to-pack", "archive.x", "=source.bin"]).is_err());
+    assert!(parse_args(&["add-to-pack", "archive.x", "member.bin="]).is_err());
+    assert!(parse_args(&[
+        "add-to-pack",
+        "--skip-existing",
+        "archive.x",
+        "member.bin=source.bin"
+    ])
+    .is_err());
+    assert!(parse_args(&[
+        "add-to-pack",
+        "--dry-run",
+        "archive.x",
+        "member.bin=source.bin"
+    ])
+    .is_err());
+}
+
+#[test]
+fn parses_add_to_pack_folder_and_backup_options() {
+    let command = parse_args(&[
+        "add-to-pack",
+        "--backup=before.x",
+        "--folder=selected",
+        "archive.x",
+    ])
+    .unwrap();
+    assert_eq!(
+        command,
+        Command::AddToPack {
+            archive: "archive.x".into(),
+            files: Vec::new(),
+            overwrite: false,
+            backup: Some("before.x".into()),
+            folders: vec!["selected".into()],
+        }
+    );
+}
+
+#[test]
 fn parses_modern_operation_options() {
     let parsed = parse_args(&[
         "extract",

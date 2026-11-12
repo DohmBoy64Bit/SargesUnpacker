@@ -1,6 +1,6 @@
 use sarges_unpacker::file_ops::{
-    create, extract, extract_all, extract_with_options, CreateOptions, ExecutionOptions,
-    ExistingFilePolicy,
+    add_files_to_archive, create, extract, extract_all, extract_with_options, AddFilesOptions,
+    CreateOptions, ExecutionOptions, ExistingFilePolicy,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -282,6 +282,121 @@ fn extract_all_reports_failures_without_stopping_other_archives() {
     assert_eq!(report.extracted, 1);
     assert_eq!(report.failures.len(), 1);
     assert_eq!(fs::read(output.join("good/member.txt")).unwrap(), b"good");
+}
+
+#[test]
+fn add_files_to_archive_appends_new_members_and_replaces_with_overwrite() {
+    let root = fixture("add-files-to-archive");
+    let archive_path = root.join("sample.x");
+    let mut bytes = Vec::new();
+    sarges_unpacker::archive::ArchiveWriter::new()
+        .add("existing.txt", b"old")
+        .add("keep.bin", b"keep")
+        .write_to(&mut bytes)
+        .unwrap();
+    fs::write(&archive_path, bytes).unwrap();
+
+    let replacement = root.join("replacement.txt");
+    let addition = root.join("addition.bin");
+    fs::write(&replacement, b"new").unwrap();
+    fs::write(&addition, b"added").unwrap();
+
+    add_files_to_archive(
+        &archive_path,
+        &[
+            ("existing.txt".into(), replacement.clone()),
+            ("nested/addition.bin".into(), addition),
+        ],
+        AddFilesOptions {
+            overwrite: true,
+            ..AddFilesOptions::default()
+        },
+    )
+    .unwrap();
+
+    let rebuilt =
+        sarges_unpacker::archive::Archive::parse(&fs::read(&archive_path).unwrap()).unwrap();
+    assert_eq!(
+        rebuilt.entries(),
+        vec![
+            "existing.txt".to_string(),
+            "keep.bin".to_string(),
+            "nested\\addition.bin".to_string()
+        ]
+    );
+    let rebuilt_bytes = fs::read(&archive_path).unwrap();
+    assert_eq!(
+        rebuilt.payload(&rebuilt_bytes, "existing.txt").unwrap(),
+        b"new"
+    );
+    assert_eq!(
+        rebuilt
+            .payload(&rebuilt_bytes, "nested\\addition.bin")
+            .unwrap(),
+        b"added"
+    );
+}
+
+#[test]
+fn add_files_to_archive_rejects_duplicates_without_modifying_archive() {
+    let root = fixture("add-files-duplicate");
+    let archive_path = root.join("sample.x");
+    let mut bytes = Vec::new();
+    sarges_unpacker::archive::ArchiveWriter::new()
+        .add("existing.txt", b"old")
+        .write_to(&mut bytes)
+        .unwrap();
+    fs::write(&archive_path, &bytes).unwrap();
+    let source = root.join("replacement.txt");
+    fs::write(&source, b"new").unwrap();
+
+    assert!(add_files_to_archive(
+        &archive_path,
+        &[("existing.txt".into(), source)],
+        AddFilesOptions::default(),
+    )
+    .is_err());
+    assert_eq!(fs::read(&archive_path).unwrap(), bytes);
+}
+
+#[test]
+fn add_files_to_archive_imports_folders_and_creates_a_backup() {
+    let root = fixture("add-files-folder");
+    let archive_path = root.join("sample.x");
+    let folder = root.join("selected");
+    fs::create_dir_all(folder.join("nested")).unwrap();
+    fs::write(folder.join("one.cfg"), b"one").unwrap();
+    fs::write(folder.join("nested/two.cfg"), b"two").unwrap();
+    let mut bytes = Vec::new();
+    sarges_unpacker::archive::ArchiveWriter::new()
+        .add("existing.txt", b"old")
+        .write_to(&mut bytes)
+        .unwrap();
+    fs::write(&archive_path, &bytes).unwrap();
+    let backup = root.join("sample-before.x");
+
+    add_files_to_archive(
+        &archive_path,
+        &[],
+        AddFilesOptions {
+            folders: vec![folder],
+            backup: Some(backup.clone()),
+            ..AddFilesOptions::default()
+        },
+    )
+    .unwrap();
+
+    assert_eq!(fs::read(backup).unwrap(), bytes);
+    let updated =
+        sarges_unpacker::archive::Archive::parse(&fs::read(&archive_path).unwrap()).unwrap();
+    assert_eq!(
+        updated.entries(),
+        vec![
+            "existing.txt".to_string(),
+            "nested\\two.cfg".to_string(),
+            "one.cfg".to_string()
+        ]
+    );
 }
 
 #[test]

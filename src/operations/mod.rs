@@ -1,6 +1,6 @@
 //! High-level archive create, extract, list, verify, and stats operations.
 
-use crate::archive::{Archive, HEADER_SIZE};
+use crate::archive::{Archive, ArchiveWriter, HEADER_SIZE};
 use crate::filesystem::{self, CollectionOptions};
 use std::collections::HashSet;
 use std::fs::{self, File};
@@ -9,6 +9,17 @@ use std::path::{Path, PathBuf};
 
 /// Filesystem selection options used by archive creation.
 pub type CreateOptions<'a> = CollectionOptions<'a>;
+
+/// Controls how files are merged into an existing archive.
+#[derive(Debug, Default)]
+pub struct AddFilesOptions {
+    /// Replace existing members with matching names.
+    pub overwrite: bool,
+    /// Optional destination for a pre-modification archive copy.
+    pub backup: Option<PathBuf>,
+    /// Folders whose files are imported using paths relative to each folder.
+    pub folders: Vec<PathBuf>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Controls handling of existing extraction targets.
@@ -107,6 +118,119 @@ pub fn create_with_options(
     stream.sync_all()?;
     drop(stream);
     fs::rename(temporary, output)
+}
+
+/// Adds source files to an existing archive, optionally replacing members.
+pub fn add_files_to_archive(
+    input: &Path,
+    files: &[(String, PathBuf)],
+    options: AddFilesOptions,
+) -> io::Result<()> {
+    let bytes = fs::read(input)?;
+    let archive = Archive::parse(&bytes)?;
+    let mut requested_files = files.to_vec();
+    for folder in &options.folders {
+        let collected = filesystem::collect_files(
+            folder,
+            folder,
+            &CollectionOptions {
+                recurse: true,
+                mask: None,
+            },
+        )?;
+        requested_files.extend(collected);
+    }
+    let mut additions = Vec::with_capacity(requested_files.len());
+    let mut requested = HashSet::new();
+
+    for (name, source) in &requested_files {
+        let name = normalize_member_name(name)?;
+        if !requested.insert(name.clone()) {
+            return Err(crate::errors::invalid_input(format!(
+                "duplicate archive member: {name}"
+            )));
+        }
+        let data = fs::read(source)?;
+        additions.push((name, data));
+    }
+
+    let mut output = ArchiveWriter::new();
+    let mut replaced = HashSet::new();
+    for entry in archive.records() {
+        if let Some((_, data)) = additions.iter().find(|(name, _)| name == &entry.name) {
+            if !options.overwrite {
+                return Err(crate::errors::invalid_input(format!(
+                    "archive member already exists: {}",
+                    entry.name
+                )));
+            }
+            output = output.add(&entry.name, data);
+            replaced.insert(entry.name.clone());
+        } else {
+            output = output.add(&entry.name, archive.payload(&bytes, &entry.name)?);
+        }
+    }
+    for (name, data) in additions {
+        if !replaced.contains(&name) {
+            output = output.add(name, &data);
+        }
+    }
+
+    let temporary = input.with_extension("tmp");
+    let mut serialized = Vec::new();
+    output.write_to(&mut serialized)?;
+    Archive::parse(&serialized)?;
+    fs::write(&temporary, serialized)?;
+    replace_file(input, &temporary, options.backup.as_deref())
+}
+
+fn normalize_member_name(name: &str) -> io::Result<String> {
+    let normalized = name.replace('/', "\\");
+    if normalized.is_empty() || normalized.len() > 255 {
+        return Err(crate::errors::invalid_input("invalid archive member name"));
+    }
+    let path = Path::new(&normalized);
+    if path.is_absolute()
+        || path.components().any(|component| {
+            matches!(
+                component,
+                std::path::Component::Prefix(_)
+                    | std::path::Component::RootDir
+                    | std::path::Component::CurDir
+                    | std::path::Component::ParentDir
+            )
+        })
+    {
+        return Err(crate::errors::invalid_input(
+            "archive member path must be relative",
+        ));
+    }
+    Ok(normalized)
+}
+
+fn replace_file(input: &Path, temporary: &Path, backup: Option<&Path>) -> io::Result<()> {
+    if backup == Some(input) || backup == Some(temporary) {
+        return Err(crate::errors::invalid_input(
+            "backup path must differ from archive path",
+        ));
+    }
+    if let Some(backup) = backup {
+        fs::copy(input, backup)?;
+    }
+    let rollback = input.with_extension("rollback.tmp");
+    let _ = fs::remove_file(&rollback);
+    fs::rename(input, &rollback)?;
+    match fs::rename(temporary, input) {
+        Ok(()) => {
+            let _ = fs::remove_file(rollback);
+            Ok(())
+        }
+        Err(error) => {
+            let _ = fs::rename(rollback, input);
+            let _ = fs::remove_file(temporary);
+            Err(error)
+        }
+    }
 }
 
 /// Extracts an archive using default execution options.
