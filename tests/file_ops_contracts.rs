@@ -258,7 +258,7 @@ fn recursively_extracts_all_archives_and_supports_dry_run() {
     let output = root.join("output");
     extract_all(&archives, &output, true, ExecutionOptions::default()).unwrap();
     assert_eq!(
-        fs::read(output.join("nested/member.txt")).unwrap(),
+        fs::read(output.join("nested/nested/member.txt")).unwrap(),
         b"nested"
     );
 }
@@ -282,4 +282,38 @@ fn extract_all_reports_failures_without_stopping_other_archives() {
     assert_eq!(report.extracted, 1);
     assert_eq!(report.failures.len(), 1);
     assert_eq!(fs::read(output.join("good/member.txt")).unwrap(), b"good");
+}
+
+#[test]
+fn extract_all_preserves_relative_archive_directories() {
+    let root = fixture("extract-all-relative-paths");
+    let archives = root.join("archives");
+    let nested = archives.join("missions").join("gb");
+    fs::create_dir_all(&nested).unwrap();
+
+    let mut bytes = Vec::new();
+    sarges_unpacker::archive::ArchiveWriter::new()
+        .add("member.txt", b"nested")
+        .write_to(&mut bytes)
+        .unwrap();
+    fs::write(nested.join("attic.x"), bytes).unwrap();
+
+    let mut bytes = Vec::new();
+    sarges_unpacker::archive::ArchiveWriter::new()
+        .add("member.txt", b"root")
+        .write_to(&mut bytes)
+        .unwrap();
+    fs::write(archives.join("attic.x"), bytes).unwrap();
+
+    let output = root.join("output");
+    let report = extract_all(&archives, &output, true, ExecutionOptions::default()).unwrap();
+
+    assert_eq!(report.discovered, 2);
+    assert_eq!(report.extracted, 2);
+    assert!(report.failures.is_empty());
+    assert_eq!(fs::read(output.join("attic/member.txt")).unwrap(), b"root");
+    assert_eq!(
+        fs::read(output.join("missions/gb/attic/member.txt")).unwrap(),
+        b"nested"
+    );
 }

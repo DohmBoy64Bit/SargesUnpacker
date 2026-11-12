@@ -117,7 +117,9 @@ into a directory named after its file stem:
 sarges-unpacker extract-all path/to/archives path/to/output
 ```
 
-Use `--recursive` to discover archives in nested directories:
+Use `--recursive` to discover archives in nested directories. The directory
+path relative to the input root is preserved, so `missions/gb/attic.x` is
+extracted to `output/missions/gb/attic/`:
 
 ```text
 sarges-unpacker extract-all --recursive path/to/archives path/to/output

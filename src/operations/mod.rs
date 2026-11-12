@@ -173,6 +173,9 @@ pub fn extract_all(
     let mut output_names = HashSet::new();
 
     for archive in archives {
+        let relative_archive = archive
+            .strip_prefix(input)
+            .map_err(|error| crate::errors::invalid_input(error.to_string()))?;
         let name = archive
             .file_stem()
             .and_then(|stem| stem.to_str())
@@ -182,7 +185,8 @@ pub fn extract_all(
                     archive.display()
                 ))
             })?;
-        let key = name.to_ascii_lowercase();
+        let relative_destination = relative_archive.with_file_name(name);
+        let key = relative_destination.to_string_lossy().to_ascii_lowercase();
         if !output_names.insert(key) {
             report.failures.push(format!(
                 "{}: output directory name collision",
@@ -190,7 +194,7 @@ pub fn extract_all(
             ));
             continue;
         }
-        let destination = output.join(name);
+        let destination = output.join(relative_destination);
         match extract_with_options(&archive, &destination, execution) {
             Ok(()) => report.extracted += 1,
             Err(error) => report

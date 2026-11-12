@@ -57,10 +57,10 @@ impl Archive {
                 "unsupported archive version",
             ));
         }
-        if u32le(bytes, 12)? as usize != bytes.len() {
+        if u32le(bytes, 12)? as usize > bytes.len() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                "archive size does not match input",
+                "archive is truncated",
             ));
         }
         let count = u32le(bytes, 16)? as usize;

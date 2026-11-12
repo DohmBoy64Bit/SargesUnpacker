@@ -24,14 +24,27 @@ fn rejects_unsupported_version() {
 }
 
 #[test]
-fn rejects_inconsistent_archive_size() {
+fn rejects_truncated_archive_size() {
     let mut bytes = Vec::new();
     ArchiveWriter::new()
         .add("x", b"x")
         .write_to(&mut bytes)
         .unwrap();
-    bytes[12..16].copy_from_slice(&55u32.to_le_bytes());
+    bytes[12..16].copy_from_slice(&u32::MAX.to_le_bytes());
     assert!(Archive::parse(&bytes).is_err());
+}
+
+#[test]
+fn accepts_archive_with_trailing_bytes_like_reference_tool() {
+    let mut bytes = Vec::new();
+    ArchiveWriter::new()
+        .add("x", b"x")
+        .write_to(&mut bytes)
+        .unwrap();
+    bytes.extend_from_slice(b"trailing data");
+
+    let archive = Archive::parse(&bytes).unwrap();
+    assert_eq!(archive.entries(), vec!["x"]);
 }
 
 #[test]
